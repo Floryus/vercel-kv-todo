@@ -1,113 +1,124 @@
-import Image from 'next/image'
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { addTodo } from "./kvStorage/AddTodo";
+import { getTodoIds } from "./kvStorage/GetTodoIds";
+import { getTodo } from "./kvStorage/GetTodo";
+import TodoPanel from "./components/TodoPanel";
+import ViewTabs from "./components/ViewTabs";
+import getTodoPlaceholder from "./resources/TodoPlaceholder";
+import { TodoProps, ViewDefinition } from "./Types";
+import BlockView from "./components/BlockView";
+
+//TODO: implement user views via DB
+const views: ViewDefinition[] = [
+  { name: "Block", aspect: "title", type: "Block" },
+  { name: "Column", aspect: "title", type: "Column" },
+  { name: "Matrix", aspect: "ghgh", type: "Matrix" },
+];
 
 export default function Home() {
+  // TODO: create user logic
+  const userId = "user1";
+
+  const [placeholder, setPlaceholder] = useState(getTodoPlaceholder());
+  const [todoText, setTodoText] = useState("");
+
+  const [todos, setTodos] = useState<TodoProps[]>([]);
+  const [todosWithoutAspect, setTodosWithoutAspect] = useState<TodoProps[]>([]);
+  const [currTodoIds, setCurrTodoIds] = useState<string[]>([]);
+
+  const [aspect, setAspect] = useState<string>("title");
+  const [viewType, setViewType] = useState<String>(views[0].name);
+
+  async function changeView(newView: ViewDefinition) {
+    setViewType(newView.type);
+    setAspect(newView.aspect);
+    console.log(newView);
+    // calculate which todos are in the view and which are on the side panel
+    setTodosWithoutAspect(todos.filter((todo) => !todo[newView.aspect]));
+  }
+
+  useEffect(() => {
+    updateTodos();
+  }, []);
+
+  async function updateTodos() {
+    const todoIds = await getTodoIds(userId);
+    if (todoIds) {
+      const newTodoIds = todoIds.filter(
+        (todo) => currTodoIds.indexOf(todo) === -1
+      );
+
+      const newTodos: any[] = await Promise.all(
+        newTodoIds.map(async (todo) => {
+          const t = await getTodo(userId, todo);
+          return t;
+        })
+      );
+
+      setCurrTodoIds([...currTodoIds, ...newTodoIds]);
+      setTodos([...todos, ...newTodos]);
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (todoText.trim() !== "") {
+      addTodo(userId, todoText);
+      setTodoText("");
+      updateTodos();
+      setPlaceholder(getTodoPlaceholder());
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="flex min-h-screen flex-col justify-between p-12 w-full">
+      <div className="w-full bg-gray-800 rounded-md p-4">
+        <div className="flex flex-grow">
+          <div className="w-1/4 border-white border-opacity-20 focus:outline-none focus:border-opacity-40">
+            <form onSubmit={handleSubmit}>
+              <div className="bg-gray-800 rounded-md  flex items-center shadow-md hover:shadow-lg mb-3">
+                <input
+                  type="text"
+                  placeholder={placeholder}
+                  value={todoText}
+                  onChange={(e) => setTodoText(e.target.value)}
+                  className="bg-gray-800 text-white flex-grow p-2 pr-0 rounded-l-md border-2 border-white border-opacity-20 focus:outline-none focus:border-opacity-40"
+                />
+                <button
+                  type="submit"
+                  onClick={handleSubmit}
+                  className="text-white bg-rose-600 p-2 rounded-r-md hover:bg-rose-700 focus:outline-none focus:bg-rose-700 border-t-2 border-b-2 border-r-2 border-white border-opacity-20 items-center"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+            {/* TODO list */}
+
+            {todosWithoutAspect.length > 0 ? (
+              todosWithoutAspect.map((todo, index) => (
+                <TodoPanel key={index} todo={todo} />
+              ))
+            ) : (
+              <div className="w-full flex justify-center items-center text-gray-400 p-4">
+                This view contains all todos.
+              </div>
+            )}
+          </div>
+          <div className="w-3/4 px-4">
+            {/* TODO details */}
+            <ViewTabs viewList={views} setNewView={changeView} />
+            {/* Add components for different type if tabs */}
+            {viewType === "Block" ? (
+              <BlockView todos={todos} aspect={aspect} />
+            ) : null}
+            {viewType === "Column" ? <div>Column</div> : null}
+            {viewType === "Matrix" ? <div>Matrix</div> : null}
+          </div>
         </div>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
     </main>
-  )
+  );
 }
